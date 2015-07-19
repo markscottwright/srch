@@ -159,7 +159,7 @@ struct options_t {
     bool no_filenames = false;          // TODO
     bool count = false;                 // TODO
     int lines_before = 3;
-    int lines_after = 0;                // TODO
+    int lines_after = 1;
     set<string> included_files;         // TODO
     set<string> excluded_files;         // TODO
     set<string> included_directories;   // TODO
@@ -188,6 +188,7 @@ int main(int argc, char* argv[])
             ifstream file(file_path.path());
             int line_number = 0;
             vector<string> lines_before;
+            int lines_after_left = 0;
 
             string line;
             while (getline(file, line)) {
@@ -212,9 +213,14 @@ int main(int argc, char* argv[])
 
                     // print matching line
                     cout << file_path.path() << ":" << line_number << " " << line << endl;
+                    lines_after_left = options.lines_after;
                 }
 
                 // only add to before contex if we didn't print it
+                else if (lines_after_left > 0) {
+                    cout << file_path.path() << ":" << line_number << " " << line << endl;
+                    lines_after_left--;
+                }
                 else {
                     bounded_add(lines_before, line, options.lines_before);
                 }
