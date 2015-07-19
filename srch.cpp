@@ -1,5 +1,5 @@
 /* 
- * Author:          Mark Wright (wrightm@datacard.com)
+ * Author:          Mark Wright (markscottwright@gmail.com)
  * Creation Date:   2015-07-19
  */
 #include <iostream>
