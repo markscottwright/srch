@@ -12,6 +12,9 @@
 using namespace std;
 using namespace std::tr2::sys;
 
+/**
+ * would be nice if the stdlib had this...
+ */
 string tolower(string const& str) {
     string lower_str;
     lower_str.resize(str.size());
@@ -21,6 +24,9 @@ string tolower(string const& str) {
     return lower_str;
 }
 
+/**
+ * does path match the file globs in patterns?
+ */
 bool matches_pattern(set<string> const& patterns, path const& path) {
     auto lower_path = tolower(path.leaf());
     return patterns.find(lower_path) != end(patterns);
@@ -137,24 +143,72 @@ srch_directory_iterator end(srch_directory_iterator& i) {
     return end_;
 }
 
+struct options_t {
+    bool invert = false;
+    bool ignore_case = false;
+    bool match_words = false;
+    bool literal_match = false;
+    bool filenames_only = true;
+    bool no_filenames = false;
+    bool count = false;
+    int lines_before = 3;
+    int lines_after = 0;
+    set<string> included_files;
+    set<string> excluded_files;
+    set<string> included_directories;
+    set<string> excluded_directories;
+};
+
+void bounded_add(vector<string>& items, string const& item, size_t max_size)
+{
+    if (max_size > 0) {
+        items.push_back(item);
+        if (items.size() > max_size)
+            items.erase(items.begin());
+    }
+}
+
 int main(int argc, char* argv[])
 {
     string pattern = argv[1];
+    options_t options;
+
+    bool match_found = false;
     try {
         auto exclude_directories = set<string> {".git", "__pycache__"};
         for (auto file_path : srch_directory_iterator(".", exclude_directories)) {
             ifstream file(file_path.path());
             string line;
+            int line_number = 0;
+            vector<string> lines_before;
             while (getline(file, line)) {
-                if (line.find(pattern) != string::npos)
-                    cout << line << endl;
+                line_number++;
+                bool found = (line.find(pattern) != string::npos);
+                if (found || options.invert)
+                    match_found = true;
+                if ((found && !options.invert) || (!found && options.invert)) {
+
+                    // print context, if requested
+                    if (options.lines_before > 0) {
+                        int context_line_number = line_number - lines_before.size();
+                        for (auto line_before : lines_before) {
+                            cout << file_path.path() << ":" << context_line_number << " " << line_before << endl;
+                            context_line_number++;
+                        }
+                        lines_before.clear();
+                    }
+
+                    cout << file_path.path() << ":" << line_number << " " << line << endl;
+                }
+                else
+                    bounded_add(lines_before, line, options.lines_before);
             }
         }
     }
     catch (exception& e) {
         cerr << e.what() << endl;
     }
-    return 0;
+    return match_found ? 0 : 1;
 }
 
 
