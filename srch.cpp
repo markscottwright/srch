@@ -33,10 +33,14 @@ bool matches_pattern(set<string> const& patterns, path const& path) {
 }
 
 
+/**
+ * Implement the InputIterator interface, with recursive directory searching and
+ * skipping of files and directories matching patterns
+ */
 class srch_directory_iterator {
 private:
     vector<directory_iterator> path_stack;
-    set<string> exclude_directories;
+    set<string> excluded_directories;
     directory_iterator end_;
     directory_iterator current_pos;
 
@@ -45,9 +49,12 @@ private:
     }
 
     bool accepted_directory(path const& d) {
-        return !matches_pattern(exclude_directories, d);
+        return !matches_pattern(excluded_directories, d);
     }
 
+    /** if current_pos points to a non-excluded file, do nothing.  Otherwise,
+     * move to the next non-excluded file or end_
+     */
     void accept_or_move() {
         while (current_pos != end_ || !path_stack.empty()) {
 
@@ -79,8 +86,8 @@ private:
 
 public:
     srch_directory_iterator(string const& root,
-            set<string> const& exclude_directories_)
-        : exclude_directories(exclude_directories_)
+            set<string> const& excluded_directories_)
+        : excluded_directories(excluded_directories_)
     {
         current_pos = directory_iterator(path(root));
 
@@ -145,18 +152,18 @@ srch_directory_iterator end(srch_directory_iterator& i) {
 
 struct options_t {
     bool invert = false;
-    bool ignore_case = false;
-    bool match_words = false;
-    bool literal_match = false;
-    bool filenames_only = true;
-    bool no_filenames = false;
-    bool count = false;
+    bool ignore_case = false;           // TODO
+    bool match_words = false;           // TODO
+    bool literal_match = false;         // TODO
+    bool filenames_only = true;         // TODO
+    bool no_filenames = false;          // TODO
+    bool count = false;                 // TODO
     int lines_before = 3;
-    int lines_after = 0;
-    set<string> included_files;
-    set<string> excluded_files;
-    set<string> included_directories;
-    set<string> excluded_directories;
+    int lines_after = 0;                // TODO
+    set<string> included_files;         // TODO
+    set<string> excluded_files;         // TODO
+    set<string> included_directories;   // TODO
+    set<string> excluded_directories;   // TODO
 };
 
 void bounded_add(vector<string>& items, string const& item, size_t max_size)
@@ -175,8 +182,9 @@ int main(int argc, char* argv[])
 
     bool match_found = false;
     try {
-        auto exclude_directories = set<string> {".git", "__pycache__"};
-        for (auto file_path : srch_directory_iterator(".", exclude_directories)) {
+        options.excluded_directories = set<string> {".git", "__pycache__"};
+        for (auto file_path :
+                srch_directory_iterator(".", options.excluded_directories)) {
             ifstream file(file_path.path());
             int line_number = 0;
             vector<string> lines_before;
