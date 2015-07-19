@@ -178,14 +178,18 @@ int main(int argc, char* argv[])
         auto exclude_directories = set<string> {".git", "__pycache__"};
         for (auto file_path : srch_directory_iterator(".", exclude_directories)) {
             ifstream file(file_path.path());
-            string line;
             int line_number = 0;
             vector<string> lines_before;
+
+            string line;
             while (getline(file, line)) {
                 line_number++;
                 bool found = (line.find(pattern) != string::npos);
+
+                // for return code
                 if (found || options.invert)
                     match_found = true;
+
                 if ((found && !options.invert) || (!found && options.invert)) {
 
                     // print context, if requested
@@ -198,10 +202,14 @@ int main(int argc, char* argv[])
                         lines_before.clear();
                     }
 
+                    // print matching line
                     cout << file_path.path() << ":" << line_number << " " << line << endl;
                 }
-                else
+
+                // only add to before contex if we didn't print it
+                else {
                     bounded_add(lines_before, line, options.lines_before);
+                }
             }
         }
     }
