@@ -87,7 +87,11 @@ public:
     srch_directory_iterator() {
     }
 
-    directory_entry const* operator->() {
+    directory_entry const& operator*() const {
+        return *current_pos;
+    }
+
+    directory_entry const* operator->() const {
         return &(*current_pos);
     }
 
@@ -135,17 +139,17 @@ srch_directory_iterator end(srch_directory_iterator& i) {
 
 int main(int argc, char* argv[])
 {
+    string pattern = argv[1];
     try {
         auto exclude_directories = set<string> {".git", "__pycache__"};
-        srch_directory_iterator end2;
-        for (auto it = srch_directory_iterator(".", exclude_directories); it !=
-                end2; ++it) {
-            cout << it->path() << endl;
+        for (auto file_path : srch_directory_iterator(".", exclude_directories)) {
+            ifstream file(file_path.path());
+            string line;
+            while (getline(file, line)) {
+                if (line.find(pattern) != string::npos)
+                    cout << line << endl;
+            }
         }
-        auto it = begin(srch_directory_iterator(".", exclude_directories));
-        auto e = end(srch_directory_iterator(".", exclude_directories));
-        for (auto p : srch_directory_iterator(".", exclude_directories))
-            ;
     }
     catch (exception& e) {
         cerr << e.what() << endl;
