@@ -24,6 +24,24 @@ string tolower(string const& str) {
     return lower_str;
 }
 
+/**
+ * This would be another thing that the stdlib should have...
+ */
+string escape_regex(string const& regex)
+{
+    // see http://en.cppreference.com/w/cpp/regex/ecmascript
+    static const string special_characters("^$\\.*+?()[]{}|");
+    string escaped;
+    escaped.reserve(regex.size());
+    for (auto ch : regex) {
+        if (special_characters.find(ch) != string::npos)
+            escaped.push_back('\\');
+        escaped.push_back(ch);
+    }
+
+    return escaped;
+}
+
 bool startswith(string const& s, string const& prefix) {
     if (s.size() >= prefix.size()) {
         for (int i=0; i < prefix.size(); ++i)
