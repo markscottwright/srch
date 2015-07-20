@@ -271,13 +271,12 @@ bool parse_options(
     return true;
 }
 
-// TODO
 void print_usage(string program_name)
 {
     cout << "usage:" << program_name << endl;
 }
 
-bool line_matches(string const& line, vector<string>& patterns)
+bool line_matches(string const& line, vector<string> const& patterns)
 {
     for (auto pattern : patterns) {
         if (line.find(pattern) != string::npos) {
@@ -287,7 +286,7 @@ bool line_matches(string const& line, vector<string>& patterns)
     return false;
 }
 
-bool line_matches(string const& line, vector<regex>& patterns)
+bool line_matches(string const& line, vector<regex> const& patterns)
 {
     for (auto pattern : patterns) {
         if (regex_search(line, pattern)) {
@@ -297,99 +296,140 @@ bool line_matches(string const& line, vector<regex>& patterns)
     return false;
 }
 
+/** print the lines before the match */
+void print_pre_context(
+        vector<string> const& lines_before, 
+        directory_entry const& file_path,
+        int line_number,
+        bool no_filenames)
+{
+    int context_line_number = line_number - lines_before.size();
+    for (auto line_before : lines_before) {
+        print_line(file_path, context_line_number, line_before, no_filenames);
+        context_line_number++;
+    }
+}
+
+vector<regex> build_regexes(
+    vector<string> const& patterns,
+    bool ignore_case,
+    bool match_words
+    )
+{
+    // TODO literal match + word-regexp isn't working
+    // create regex patterns, if not doing literal match
+    vector<regex> regex_patterns;
+    regex::flag_type flags = regex::ECMAScript;
+    if (ignore_case)
+        flags |= regex::icase;
+    for (auto pattern : patterns) {
+        if (match_words)
+            regex_patterns.push_back(regex("\\b" + pattern + "\\b", flags));
+        else
+            regex_patterns.push_back(regex(pattern, flags));
+    }
+    return regex_patterns;
+}
+
+/**
+ * Returns matches in file, if options.filenames_only not set.  Otherwise
+ * returns 1 or 0
+ */
+int search_file(
+    directory_entry const& file_path,
+    vector<string> const& patterns,
+    vector<regex> const& regex_patterns,
+    options_t const& options
+    )
+{
+    int line_number = 0;
+    vector<string> lines_before;
+    int lines_after_left = 0;
+    int matches_in_file = 0;
+    string line;
+
+    // start looping through the file line by line
+    ifstream file(file_path.path());
+    while (getline(file, line)) {
+        line_number++;
+
+        // any of the patterns present?
+        bool found = options.literal_match 
+            ? line_matches(line, patterns)
+            : line_matches(line, regex_patterns);
+
+        if ((found && !options.invert) || (!found && options.invert)) {
+            matches_in_file++;
+
+            // if filenames only, don't print out the match, but we can
+            // only break early if we're not counting the total matches
+            if (options.filenames_only) {
+                if (!options.count) {
+                    cout << file_path.path() << endl;
+                    break;
+                }
+
+                else
+                    continue;
+            }
+
+            // print context, if requested
+            if (options.lines_before > 0) {
+                print_pre_context(lines_before, file_path, line_number,
+                        options.no_filenames);
+                lines_before.clear();
+            }
+
+            // print matching line
+            print_line(
+                file_path, line_number, line, options.no_filenames);
+            lines_after_left = options.lines_after;
+        }
+
+        // print any trailing context
+        else if (lines_after_left > 0) {
+            print_line(
+                file_path, line_number, line, options.no_filenames);
+            lines_after_left--;
+        }
+
+        // only add to before contex if we didn't print it
+        else {
+            bounded_add(lines_before, line, options.lines_before);
+        }
+    }
+
+    if (options.count)
+        cout << file_path.path() << " " << matches_in_file << endl;
+
+    return matches_in_file;
+}
+
 int main(int argc, char* argv[])
 {
     // parse options
     options_t options;
     vector<string> patterns;
     vector<regex> regex_patterns;
-    if (!parse_options(argc, argv, options, patterns)) {
+    if (!parse_options(argc, argv, options, patterns)
+            || patterns.size() == 0) {
         print_usage(argv[0]);
         exit(1);
     }
 
-    // TODO literal match + word-regexp isn't working
-    // create regex patterns, if not doing literal match
+    // if we're not doing a literal match, build regex objects
     if (!options.literal_match) {
-        regex::flag_type flags = regex::ECMAScript;
-        if (options.ignore_case)
-            flags |= regex::icase;
-        for (auto pattern : patterns) {
-            if (options.match_words)
-                regex_patterns.push_back(regex("\\b" + pattern + "\\b", flags));
-            else
-                regex_patterns.push_back(regex(pattern, flags));
-        }
+        regex_patterns = build_regexes(patterns,
+                options.ignore_case,
+                options.match_words);
     }
 
     int total_matches = 0;
     try {
         for (auto file_path :
                 srch_directory_iterator(".", options.excluded_directories)) {
-            ifstream file(file_path.path());
-            int line_number = 0;
-            vector<string> lines_before;
-            int lines_after_left = 0;
-            int matches_in_file = 0;
-
-            // start looping through the file line by line
-            string line;
-            while (getline(file, line)) {
-                line_number++;
-
-                // any of the patterns present?
-                bool found = options.literal_match 
-                    ? line_matches(line, patterns)
-                    : line_matches(line, regex_patterns);
-
-                if ((found && !options.invert) || (!found && options.invert)) {
-                    total_matches++;
-                    matches_in_file++;
-
-                    // if filenames only, don't print out the match, but we can
-                    // only break early if we're not counting the total matches
-                    if (options.filenames_only) {
-                        if (!options.count) {
-                            cout << file_path.path() << endl;
-                            break;
-                        }
-
-                        else
-                            continue;
-                    }
-
-                    // print context, if requested
-                    if (options.lines_before > 0) {
-                        int context_line_number = line_number - lines_before.size();
-                        for (auto line_before : lines_before) {
-                            print_line(
-                                file_path, context_line_number, line_before, options.no_filenames);
-                            context_line_number++;
-                        }
-                        lines_before.clear();
-                    }
-
-                    // print matching line
-                    print_line(
-                        file_path, line_number, line, options.no_filenames);
-                    lines_after_left = options.lines_after;
-                }
-
-                // print any trailing context
-                else if (lines_after_left > 0) {
-                    print_line(
-                        file_path, line_number, line, options.no_filenames);
-                    lines_after_left--;
-                }
-
-                // only add to before contex if we didn't print it
-                else {
-                    bounded_add(lines_before, line, options.lines_before);
-                }
-            }
-
-            if (options.count)
-                cout << file_path.path() << " " << matches_in_file << endl;
+            total_matches += search_file(
+                    file_path, patterns, regex_patterns, options);
         }
 
         if (options.count)
@@ -399,6 +439,7 @@ int main(int argc, char* argv[])
         cerr << e.what() << endl;
         return 1;
     }
+
     return (total_matches > 0) ? 0 : 1;
 }
 
