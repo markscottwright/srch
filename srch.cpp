@@ -172,7 +172,7 @@ struct options_t {
     bool literal_match = false;         // TODO
     bool filenames_only = false;
     bool no_filenames = false;
-    bool count = false;                 // TODO
+    bool count = false;
     int lines_before = 0;
     int lines_after = 0;
     set<string> included_files;         // TODO
@@ -272,13 +272,41 @@ void print_usage(string program_name)
     cout << "usage:" << program_name << endl;
 }
 
+bool line_matches(string const& line, vector<string>& patterns)
+{
+    for (auto pattern : patterns) {
+        if (line.find(pattern) != string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool line_matches(string const& line, vector<regex>& patterns)
+{
+    for (auto pattern : patterns) {
+        if (regex_search(line, pattern)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int main(int argc, char* argv[])
 {
+    // parse options
     options_t options;
     vector<string> patterns;
+    vector<regex> regex_patterns;
     if (!parse_options(argc, argv, options, patterns)) {
         print_usage(argv[0]);
         exit(1);
+    }
+
+    // create regex patterns, if not doing literal match
+    if (!options.literal_match) {
+        for (auto pattern : patterns)
+            regex_patterns.push_back(regex(pattern));
     }
 
     int total_matches = 0;
@@ -297,13 +325,9 @@ int main(int argc, char* argv[])
                 line_number++;
 
                 // any of the patterns present?
-                bool found = false;
-                for (auto pattern : patterns) {
-                    if (line.find(pattern) != string::npos) {
-                        found = true;
-                        break;
-                    }
-                }
+                bool found = options.literal_match 
+                    ? line_matches(line, patterns)
+                    : line_matches(line, regex_patterns);
 
                 if ((found && !options.invert) || (!found && options.invert)) {
                     total_matches++;
@@ -320,7 +344,6 @@ int main(int argc, char* argv[])
                         else
                             continue;
                     }
-
 
                     // print context, if requested
                     if (options.lines_before > 0) {
@@ -361,6 +384,7 @@ int main(int argc, char* argv[])
     }
     catch (exception& e) {
         cerr << e.what() << endl;
+        return 1;
     }
     return (total_matches > 0) ? 0 : 1;
 }
