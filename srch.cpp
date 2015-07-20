@@ -346,10 +346,10 @@ int search_file(
     vector<string> lines_before;
     int lines_after_left = 0;
     int matches_in_file = 0;
-    string line;
 
     // start looping through the file line by line
     ifstream file(file_path.path());
+    string line;
     while (getline(file, line)) {
         line_number++;
 
@@ -399,15 +399,12 @@ int search_file(
         }
     }
 
-    if (options.count)
-        cout << file_path.path() << " " << matches_in_file << endl;
-
     return matches_in_file;
 }
 
 int main(int argc, char* argv[])
 {
-    // parse options
+    // parse command line
     options_t options;
     vector<string> patterns;
     vector<regex> regex_patterns;
@@ -424,23 +421,27 @@ int main(int argc, char* argv[])
                 options.match_words);
     }
 
-    int total_matches = 0;
     try {
+        int total_matches = 0;
         for (auto file_path :
                 srch_directory_iterator(".", options.excluded_directories)) {
-            total_matches += search_file(
+            int matches = search_file(
                     file_path, patterns, regex_patterns, options);
+            total_matches += matches;
+            if (options.count)
+                cout << file_path.path() << " " << matches << endl;
         }
 
         if (options.count)
             cout << "total " << total_matches << endl;
+
+        return (total_matches > 0) ? 0 : 1;
     }
+
     catch (exception& e) {
         cerr << e.what() << endl;
         return 1;
     }
-
-    return (total_matches > 0) ? 0 : 1;
 }
 
 
