@@ -174,7 +174,7 @@ struct options_t {
     bool invert = false;
     bool ignore_case = false;
     bool match_words = false;           // TODO
-    bool literal_match = false;         // TODO
+    bool literal_match = false;
     bool filenames_only = false;
     bool no_filenames = false;
     bool count = false;
@@ -308,13 +308,18 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    // TODO literal match + word-regexp isn't working
     // create regex patterns, if not doing literal match
     if (!options.literal_match) {
         regex::flag_type flags = regex::ECMAScript;
         if (options.ignore_case)
             flags |= regex::icase;
-        for (auto pattern : patterns)
-            regex_patterns.push_back(regex(pattern, flags));
+        for (auto pattern : patterns) {
+            if (options.match_words)
+                regex_patterns.push_back(regex("\\b" + pattern + "\\b", flags));
+            else
+                regex_patterns.push_back(regex(pattern, flags));
+        }
     }
 
     int total_matches = 0;
