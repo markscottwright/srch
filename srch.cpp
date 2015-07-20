@@ -156,6 +156,11 @@ bool operator!=(
     return !(rhs == lhs);
 }
 
+/** TODO - set to beginning.  But the problem is that setting to beginning is
+ * potentially expensive.  The Std directory_iterator is a bad design anyway -
+ * you don't iterate over an iterator, you use an iterator to iterate over a
+ * "collection".
+ */
 srch_directory_iterator& begin(srch_directory_iterator& i) {
     return i;
 }
@@ -167,7 +172,7 @@ srch_directory_iterator end(srch_directory_iterator& i) {
 
 struct options_t {
     bool invert = false;
-    bool ignore_case = false;           // TODO
+    bool ignore_case = false;
     bool match_words = false;           // TODO
     bool literal_match = false;         // TODO
     bool filenames_only = false;
@@ -305,8 +310,11 @@ int main(int argc, char* argv[])
 
     // create regex patterns, if not doing literal match
     if (!options.literal_match) {
+        regex::flag_type flags = regex::ECMAScript;
+        if (options.ignore_case)
+            flags |= regex::icase;
         for (auto pattern : patterns)
-            regex_patterns.push_back(regex(pattern));
+            regex_patterns.push_back(regex(pattern, flags));
     }
 
     int total_matches = 0;
