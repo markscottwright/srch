@@ -24,6 +24,15 @@ string tolower(string const& str) {
     return lower_str;
 }
 
+bool startswith(string const& s, string const& prefix) {
+    if (s.size() >= prefix.size()) {
+        for (int i=0; i < prefix.size(); ++i)
+            if (s[i] != prefix[i])
+                return false;
+    }
+    return true;
+}
+
 /**
  * does path match the file globs in patterns?
  */
@@ -32,6 +41,12 @@ bool matches_pattern(set<string> const& patterns, path const& path) {
     return patterns.find(lower_path) != end(patterns);
 }
 
+/**
+ * set presence helper
+ */
+bool in(const char* elem, set<string> const& elems) {
+    return elems.find(elem) != end(elems);
+}
 
 /**
  * Implement the InputIterator interface, with recursive directory searching and
@@ -155,11 +170,11 @@ struct options_t {
     bool ignore_case = false;           // TODO
     bool match_words = false;           // TODO
     bool literal_match = false;         // TODO
-    bool filenames_only = true;         // TODO
-    bool no_filenames = false;          // TODO
+    bool filenames_only = false;
+    bool no_filenames = false;
     bool count = false;                 // TODO
-    int lines_before = 3;
-    int lines_after = 1;
+    int lines_before = 0;
+    int lines_after = 0;
     set<string> included_files;         // TODO
     set<string> excluded_files;         // TODO
     set<string> included_directories;   // TODO
@@ -175,62 +190,179 @@ void bounded_add(vector<string>& items, string const& item, size_t max_size)
     }
 }
 
+void print_line(path const& file, int line_number, string const& line,
+        bool no_filenames)
+{
+    if (!no_filenames)
+        cout << file << ":" << line_number << " ";
+    cout << line << endl;
+}
+
+/**
+ * parse options from command line, env variables and .srchrc.  Returns true if
+ * parsing failed and we should print usage
+ */
+bool parse_options(
+    int argc,
+    char* argv[],
+    options_t& options,
+    vector<string>& patterns
+    )
+{
+    options.excluded_directories = set<string> {".git", "__pycache__"};
+    options.excluded_files = set<string> {".gitignore"};
+
+    bool print_usage = false;
+    for (int arg_pos = 1; arg_pos < argc; ++arg_pos) {
+        if (in(argv[arg_pos], set<string>{"-i", "--ignore-case"}))
+            options.ignore_case = true;
+        else if (in(argv[arg_pos], set<string>{"-v", "--invert-match"}))
+            options.invert = true;
+        else if (in(argv[arg_pos], set<string>{"-w", "--word-regexp"}))
+            options.match_words = true;
+        else if (in(argv[arg_pos], set<string>{"-Q", "--literal"}))
+            options.literal_match = true;
+        else if (in(argv[arg_pos], set<string>{"-l", "--files-with-match"}))
+            options.filenames_only = true;
+        else if (in(argv[arg_pos], set<string>{"-L", "--files-without-match"})) {
+            options.filenames_only = true;
+            options.invert = true;
+        }
+        else if (in(argv[arg_pos], set<string>{"-h", "--no-filename"})) {
+            options.no_filenames = true;
+        }
+        else if (in(argv[arg_pos], set<string>{"-c", "--count"})) {
+            options.count = true;
+        }
+        else if (in(argv[arg_pos], set<string>{"-A", "--after-context"})) {
+            arg_pos++;
+            if (arg_pos >= argc)
+                return false;
+            options.lines_after = atoi(argv[arg_pos]);
+        }
+        else if (in(argv[arg_pos], set<string>{"-B", "--before-context"})) {
+            arg_pos++;
+            if (arg_pos >= argc)
+                return false;
+            options.lines_before = atoi(argv[arg_pos]);
+        }
+        else if (in(argv[arg_pos], set<string>{"-C", "--context"})) {
+            arg_pos++;
+            if (arg_pos >= argc)
+                return false;
+            options.lines_after = options.lines_before = atoi(argv[arg_pos]);
+        }
+        else if (in(argv[arg_pos], set<string>{"--help"})) {
+            return false;
+        }
+        else if (!startswith(argv[arg_pos], "-")) {
+            patterns.push_back(argv[arg_pos]);
+        }
+        else {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// TODO
+void print_usage(string program_name)
+{
+    cout << "usage:" << program_name << endl;
+}
+
 int main(int argc, char* argv[])
 {
-    string pattern = argv[1];
     options_t options;
+    vector<string> patterns;
+    if (!parse_options(argc, argv, options, patterns)) {
+        print_usage(argv[0]);
+        exit(1);
+    }
 
-    bool match_found = false;
+    int total_matches = 0;
     try {
-        options.excluded_directories = set<string> {".git", "__pycache__"};
         for (auto file_path :
                 srch_directory_iterator(".", options.excluded_directories)) {
             ifstream file(file_path.path());
             int line_number = 0;
             vector<string> lines_before;
             int lines_after_left = 0;
+            int matches_in_file = 0;
 
+            // start looping through the file line by line
             string line;
             while (getline(file, line)) {
                 line_number++;
-                bool found = (line.find(pattern) != string::npos);
 
-                // for return code
-                if (found || options.invert)
-                    match_found = true;
+                // any of the patterns present?
+                bool found = false;
+                for (auto pattern : patterns) {
+                    if (line.find(pattern) != string::npos) {
+                        found = true;
+                        break;
+                    }
+                }
 
                 if ((found && !options.invert) || (!found && options.invert)) {
+                    total_matches++;
+                    matches_in_file++;
+
+                    // if filenames only, don't print out the match, but we can
+                    // only break early if we're not counting the total matches
+                    if (options.filenames_only) {
+                        if (!options.count) {
+                            cout << file_path.path() << endl;
+                            break;
+                        }
+
+                        else
+                            continue;
+                    }
+
 
                     // print context, if requested
                     if (options.lines_before > 0) {
                         int context_line_number = line_number - lines_before.size();
                         for (auto line_before : lines_before) {
-                            cout << file_path.path() << ":" << context_line_number << " " << line_before << endl;
+                            print_line(
+                                file_path, context_line_number, line_before, options.no_filenames);
                             context_line_number++;
                         }
                         lines_before.clear();
                     }
 
                     // print matching line
-                    cout << file_path.path() << ":" << line_number << " " << line << endl;
+                    print_line(
+                        file_path, line_number, line, options.no_filenames);
                     lines_after_left = options.lines_after;
                 }
 
-                // only add to before contex if we didn't print it
+                // print any trailing context
                 else if (lines_after_left > 0) {
-                    cout << file_path.path() << ":" << line_number << " " << line << endl;
+                    print_line(
+                        file_path, line_number, line, options.no_filenames);
                     lines_after_left--;
                 }
+
+                // only add to before contex if we didn't print it
                 else {
                     bounded_add(lines_before, line, options.lines_before);
                 }
             }
+
+            if (options.count)
+                cout << file_path.path() << " " << matches_in_file << endl;
         }
+
+        if (options.count)
+            cout << "total " << total_matches << endl;
     }
     catch (exception& e) {
         cerr << e.what() << endl;
     }
-    return match_found ? 0 : 1;
+    return (total_matches > 0) ? 0 : 1;
 }
 
 
