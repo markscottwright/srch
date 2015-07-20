@@ -173,7 +173,7 @@ srch_directory_iterator end(srch_directory_iterator& i) {
 struct options_t {
     bool invert = false;
     bool ignore_case = false;
-    bool match_words = false;           // TODO
+    bool match_words = false;
     bool literal_match = false;
     bool filenames_only = false;
     bool no_filenames = false;

@@ -8,10 +8,10 @@ portable C++.
 TODO
 ----
 
-*   Actually do regex matching
-*   Get options from command line
 *   Exclusion and inclusion patterns for files
 *   Exclusion and inclusion patterns for directories
 *   Use glob instead of regex for files/directories
 *   catch.hpp unit tests
 *   Documentation
+*   Print usage
+*   Ack-style language-specific file pattern groups
