@@ -1,4 +1,4 @@
-/* 
+/*
  * Author:          Mark Wright (markscottwright@gmail.com)
  * Creation Date:   2015-07-19
  */
@@ -213,11 +213,27 @@ void bounded_add(vector<string>& items, string const& item, size_t max_size)
     }
 }
 
+/*
+ * Strip the leading './' if present.
+ *
+ * TODO: Convert to windows format if configured
+ */
+string fixup(string const& path_str) {
+    if (startswith(path_str, "./") || startswith(path_str, ".\\"))
+        return string(begin(path_str)+2, end(path_str));
+    return path_str;
+}
+
+string fixup(directory_entry const& path)
+{
+    return fixup(path.path());
+}
+
 void print_line(path const& file, int line_number, string const& line,
         bool no_filenames)
 {
     if (!no_filenames)
-        cout << file << ":" << line_number << " ";
+        cout << fixup(file) << ":" << line_number << ":";
     cout << line << endl;
 }
 
@@ -383,7 +399,7 @@ int search_file(
             // only break early if we're not counting the total matches
             if (options.filenames_only) {
                 if (!options.count) {
-                    cout << file_path.path() << endl;
+                    cout << fixup(file_path) << endl;
                     break;
                 }
 
@@ -447,7 +463,7 @@ int main(int argc, char* argv[])
                     file_path, patterns, regex_patterns, options);
             total_matches += matches;
             if (options.count)
-                cout << file_path.path() << " " << matches << endl;
+                cout << fixup(file_path) << " " << matches << endl;
         }
 
         if (options.count)
