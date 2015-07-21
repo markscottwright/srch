@@ -52,11 +52,15 @@ bool startswith(string const& s, string const& prefix) {
 }
 
 /**
- * does path match the file globs in patterns?
+ * does path match the regex in patterns?
+ *
+ * TODO globs?
  */
-bool matches_pattern(set<string> const& patterns, path const& path) {
-    auto lower_path = tolower(path.leaf());
-    return patterns.find(lower_path) != end(patterns);
+bool matches_pattern(vector<regex> const& patterns, path const& path) {
+    for (regex const& pattern : patterns)
+        if (regex_search(path.string(), pattern))
+            return true;
+    return false;
 }
 
 /**
@@ -73,12 +77,15 @@ bool in(const char* elem, set<string> const& elems) {
 class srch_directory_iterator {
 private:
     vector<directory_iterator> path_stack;
-    set<string> excluded_directories;
+    vector<regex> included_files;
+    vector<regex> excluded_files;
+    vector<regex> excluded_directories;
     directory_iterator end_;
     directory_iterator current_pos;
 
     bool accepted_file(path const& p) {
-        return true;
+        return matches_pattern(included_files, p)
+            && !matches_pattern(excluded_files, p);
     }
 
     bool accepted_directory(path const& d) {
@@ -119,8 +126,12 @@ private:
 
 public:
     srch_directory_iterator(string const& root,
-            set<string> const& excluded_directories_)
-        : excluded_directories(excluded_directories_)
+            vector<regex> const& included_files_,
+            vector<regex> const& excluded_files_,
+            vector<regex> const& excluded_directories_)
+        : included_files(included_files_),
+            excluded_files(excluded_files_),
+            excluded_directories(excluded_directories_)
     {
         current_pos = directory_iterator(path(root));
 
@@ -198,10 +209,9 @@ struct options_t {
     bool count = false;
     int lines_before = 0;
     int lines_after = 0;
-    set<string> included_files;         // TODO
-    set<string> excluded_files;         // TODO
-    set<string> included_directories;   // TODO
-    set<string> excluded_directories;   // TODO
+    vector<string> included_files;
+    vector<string> excluded_files;
+    vector<string> excluded_directories;
 };
 
 void bounded_add(vector<string>& items, string const& item, size_t max_size)
@@ -248,8 +258,10 @@ bool parse_options(
     vector<string>& patterns
     )
 {
-    options.excluded_directories = set<string> {".git", "__pycache__"};
-    options.excluded_files = set<string> {".gitignore"};
+    options.excluded_directories = vector<string> {"\\.git$", "__pycache__$"};
+    options.excluded_files = vector<string> {
+        "\\.gitignore$", "\\.exe$", "\\.obj$", "\\.swp$"};
+    options.included_files = vector<string> {".*"};
 
     bool print_usage = false;
     for (int arg_pos = 1; arg_pos < argc; ++arg_pos) {
@@ -436,6 +448,20 @@ int search_file(
     return matches_in_file;
 }
 
+/* compile a list of regex strings */
+static vector<regex> to_regex(vector<string> const& regex_strings)
+{
+    regex::flag_type flags = regex::ECMAScript;
+#ifdef _WIN32
+    flags |= regex::icase;
+#endif
+    
+    vector<regex> regexes;
+    for (auto regex_string : regex_strings)
+        regexes.push_back(regex(regex_string, flags));
+    return regexes;
+}
+
 int main(int argc, char* argv[])
 {
     // parse command line
@@ -458,7 +484,10 @@ int main(int argc, char* argv[])
     try {
         int total_matches = 0;
         for (auto file_path :
-                srch_directory_iterator(".", options.excluded_directories)) {
+                srch_directory_iterator(".",
+                    to_regex(options.included_files),
+                    to_regex(options.excluded_files),
+                    to_regex(options.excluded_directories))) {
             int matches = search_file(
                     file_path, patterns, regex_patterns, options);
             total_matches += matches;
