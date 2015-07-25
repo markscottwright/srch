@@ -2,15 +2,33 @@
  * Author:          Mark Wright (markscottwright@gmail.com)
  * Creation Date:   2015-07-19
  */
+#include <algorithm>
+#include <filesystem>
 #include <iostream>
+#include <locale>
+#include <map>
 #include <regex>
 #include <set>
-#include <filesystem>
-#include <locale>
-#include <algorithm>
+#include <sstream>
+#include <string>
 
 using namespace std;
 using namespace std::tr2::sys;
+
+const vector<string> DEFAULT_INCLUDES = {".*"};
+const vector<string> DEFAULT_EXCLUDES = {
+    "\\.sw[a-z]$",
+    "\\.gitignore$",
+    "\\.obj$",
+    "\\.exe$",
+};
+const vector<string> DEFAULT_EXCLUDED_DIRECTORIES = {"^\\.git$", "^__pycache__$"};
+
+map<string, vector<string>> language_definitions = {
+    {"cpp",         {"\\.cpp$", "\\.c$", "\\.h$", "\\.hpp$"}},
+    {"python",      {"\\.py$", "\\.pyw$"}},
+    {"html",        {"\\.html$", "\\.css$"}},
+};
 
 /**
  * would be nice if the stdlib had this...
@@ -54,15 +72,19 @@ bool startswith(string const& s, string const& prefix) {
 /**
  * does path match the file globs in patterns?
  */
-bool matches_pattern(set<string> const& patterns, path const& path) {
-    auto lower_path = tolower(path.leaf());
-    return patterns.find(lower_path) != end(patterns);
+bool matches_pattern(vector<regex> const& patterns, path const& path) {
+    string path_str = path.leaf();
+    for (auto pattern : patterns) {
+        if (regex_search(path_str, pattern))
+            return true;
+    }
+    return false;
 }
 
 /**
  * set presence helper
  */
-bool in(const char* elem, set<string> const& elems) {
+bool in(string const& elem, set<string> const& elems) {
     return elems.find(elem) != end(elems);
 }
 
@@ -73,12 +95,15 @@ bool in(const char* elem, set<string> const& elems) {
 class srch_directory_iterator {
 private:
     vector<directory_iterator> path_stack;
-    set<string> excluded_directories;
+    vector<regex> excluded_directories;
+    vector<regex> included_files;
+    vector<regex> excluded_files;
     directory_iterator end_;
     directory_iterator current_pos;
 
     bool accepted_file(path const& p) {
-        return true;
+        return matches_pattern(included_files, p.leaf())
+            && !matches_pattern(excluded_files, p.leaf());
     }
 
     bool accepted_directory(path const& d) {
@@ -119,8 +144,12 @@ private:
 
 public:
     srch_directory_iterator(string const& root,
-            set<string> const& excluded_directories_)
-        : excluded_directories(excluded_directories_)
+            vector<regex> const& excluded_directories_,
+            vector<regex> const& included_files_,
+            vector<regex> const& excluded_files_)
+        : excluded_directories(excluded_directories_),
+            included_files(included_files_),
+            excluded_files(excluded_files_)
     {
         current_pos = directory_iterator(path(root));
 
@@ -196,12 +225,46 @@ struct options_t {
     bool filenames_only = false;
     bool no_filenames = false;
     bool count = false;
+    bool dump_options = false;
     int lines_before = 0;
     int lines_after = 0;
-    set<string> included_files;         // TODO
-    set<string> excluded_files;         // TODO
-    set<string> included_directories;   // TODO
-    set<string> excluded_directories;   // TODO
+    vector<string> included_files = DEFAULT_INCLUDES;
+    vector<string> excluded_files = DEFAULT_EXCLUDES;
+    vector<string> excluded_directories = DEFAULT_EXCLUDED_DIRECTORIES;
+
+    string join(vector<string> const& patterns) {
+        // TODO ':' on unix
+        const char* file_separator = ";";
+        ostringstream joined;
+        bool first_element = true;
+        for (auto pattern : patterns) {
+            if (first_element)
+                first_element = false;
+            else
+                joined << ";";
+            joined << pattern;
+        }
+        return joined.str();
+    }
+
+    void dump(ostream& out) {
+        out << "==================================" << endl
+            << "options" << endl
+            << "==================================" << endl
+            << "invert=" << invert << endl
+            << "ignore_case=" << ignore_case << endl
+            << "match_words=" << match_words << endl
+            << "literal_match=" << literal_match << endl
+            << "filenames_only=" << filenames_only << endl
+            << "no_filenames=" << no_filenames << endl
+            << "count=" << count << endl
+            << "lines_before=" << lines_before << endl
+            << "lines_after=" << lines_after << endl
+            << "included_files=" << join(included_files) << endl
+            << "excluded_files=" << join(excluded_files) << endl
+            << "excluded_directories=" << join(excluded_directories) << endl
+            << "==================================" << endl;
+    }
 };
 
 void bounded_add(vector<string>& items, string const& item, size_t max_size)
@@ -248,54 +311,83 @@ bool parse_options(
     vector<string>& patterns
     )
 {
-    options.excluded_directories = set<string> {".git", "__pycache__"};
-    options.excluded_files = set<string> {".gitignore"};
-
     bool print_usage = false;
+    bool no_language_selected = true;
     for (int arg_pos = 1; arg_pos < argc; ++arg_pos) {
-        if (in(argv[arg_pos], set<string>{"-i", "--ignore-case"}))
+        string arg(argv[arg_pos]);
+        if (in(arg, set<string>{"-i", "--ignore-case"}))
             options.ignore_case = true;
-        else if (in(argv[arg_pos], set<string>{"-v", "--invert-match"}))
+        else if (in(arg, set<string>{"-v", "--invert-match"}))
             options.invert = true;
-        else if (in(argv[arg_pos], set<string>{"-w", "--word-regexp"}))
+        else if (in(arg, set<string>{"-w", "--word-regexp"}))
             options.match_words = true;
-        else if (in(argv[arg_pos], set<string>{"-Q", "--literal"}))
+        else if (in(arg, set<string>{"-Q", "--literal"}))
             options.literal_match = true;
-        else if (in(argv[arg_pos], set<string>{"-l", "--files-with-match"}))
+        else if (in(arg, set<string>{"-l", "--files-with-match"}))
             options.filenames_only = true;
-        else if (in(argv[arg_pos], set<string>{"-L", "--files-without-match"})) {
+        else if (in(arg, set<string>{"-L", "--files-without-match"})) {
             options.filenames_only = true;
             options.invert = true;
         }
-        else if (in(argv[arg_pos], set<string>{"-h", "--no-filename"})) {
+        else if (in(arg, set<string>{"-h", "--no-filename"})) {
             options.no_filenames = true;
         }
-        else if (in(argv[arg_pos], set<string>{"-c", "--count"})) {
+        else if (in(arg, set<string>{"-c", "--count"})) {
             options.count = true;
         }
-        else if (in(argv[arg_pos], set<string>{"-A", "--after-context"})) {
+        else if (in(arg, set<string>{"--dump-options"})) {
+            options.dump_options = true;
+        }
+        else if (in(arg, set<string>{"-A", "--after-context"})) {
             arg_pos++;
             if (arg_pos >= argc)
                 return false;
-            options.lines_after = atoi(argv[arg_pos]);
+            options.lines_after = atoi(arg.c_str());
         }
-        else if (in(argv[arg_pos], set<string>{"-B", "--before-context"})) {
+        else if (in(arg, set<string>{"-B", "--before-context"})) {
             arg_pos++;
             if (arg_pos >= argc)
                 return false;
-            options.lines_before = atoi(argv[arg_pos]);
+            options.lines_before = atoi(arg.c_str());
         }
-        else if (in(argv[arg_pos], set<string>{"-C", "--context"})) {
+        else if (in(arg, set<string>{"-C", "--context"})) {
             arg_pos++;
             if (arg_pos >= argc)
                 return false;
-            options.lines_after = options.lines_before = atoi(argv[arg_pos]);
+            options.lines_after = options.lines_before = atoi(arg.c_str());
         }
-        else if (in(argv[arg_pos], set<string>{"--help"})) {
+        else if (in(arg, set<string>{"--help"})) {
             return false;
         }
-        else if (!startswith(argv[arg_pos], "-")) {
-            patterns.push_back(argv[arg_pos]);
+        else if (!startswith(arg, "-")) {
+            patterns.push_back(arg);
+        }
+        else if (startswith(arg, "--no")) {
+            auto language_name = arg.substr(strlen("--no"));
+            auto language_definition = language_definitions.find(language_name);
+            if (language_definition == language_definitions.end()) {
+                cout << "unknown language:" << arg << endl;
+                return false;
+            }
+            copy(begin(language_definition->second),
+                end(language_definition->second),
+                back_inserter(options.excluded_files));
+        }
+        else if (startswith(arg, "--")) {
+            auto language_name = arg.substr(strlen("--"));
+            auto language_definition = language_definitions.find(language_name);
+            if (language_definition == language_definitions.end()) {
+                cout << "unknown language:" << arg << endl;
+                return false;
+            }
+            else if (no_language_selected) {
+                // don't go with defaults
+                options.included_files.clear();
+                no_language_selected = false;
+            }
+            copy(begin(language_definition->second),
+                end(language_definition->second),
+                back_inserter(options.included_files));
         }
         else {
             return false;
@@ -350,8 +442,6 @@ vector<regex> build_regexes(
     bool match_words
     )
 {
-    // TODO literal match + word-regexp isn't working
-    // create regex patterns, if not doing literal match
     vector<regex> regex_patterns;
     regex::flag_type flags = regex::ECMAScript;
     if (ignore_case)
@@ -448,7 +538,11 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    if (options.dump_options)
+        options.dump(cout);
+
     // if we're not doing a literal match, build regex objects
+    // TODO literal match + word-regexp isn't working
     if (!options.literal_match) {
         regex_patterns = build_regexes(patterns,
                 options.ignore_case,
@@ -456,9 +550,22 @@ int main(int argc, char* argv[])
     }
 
     try {
+#ifdef _WIN32
+        bool is_windows = true;
+#else
+        bool is_windows = false;
+#endif
+
+        // convert from strings to regexes
+        auto excluded_directories = build_regexes(
+            options.excluded_directories, is_windows, false);
+        auto included_files = build_regexes(options.included_files, is_windows, false);
+        auto excluded_files = build_regexes(options.excluded_files, is_windows, false);
+
+        // process matching files
         int total_matches = 0;
-        for (auto file_path :
-                srch_directory_iterator(".", options.excluded_directories)) {
+        for (auto file_path : srch_directory_iterator(
+                    ".", excluded_directories, included_files, excluded_files)) {
             int matches = search_file(
                     file_path, patterns, regex_patterns, options);
             total_matches += matches;
