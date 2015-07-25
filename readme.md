@@ -5,13 +5,17 @@ Ack is an amazing program, but the dependency on Perl is annoying, especially on
 Windows.  C++ 14 should have everything we need to implement Ack in standard and
 portable C++.
 
+Although, it looks like <filesystem> is C++ 17, not C++ 14.  It appears that
+recent gcc release have it, and Visual Studio 13 does.
+
 TODO
 ----
 
-*   Exclusion and inclusion patterns for files
-*   Exclusion and inclusion patterns for directories
-*   Use glob instead of regex for files/directories
 *   catch.hpp unit tests
 *   Documentation
+*   Complete language types
 *   Print usage
-*   Ack-style language-specific file pattern groups
+*   Config from rc, environment variables
+*   word-regexp + literal support
+*   Change arguments from multiple patterns to <pattern> <directories>
+*   CMake build instead of .bat file
