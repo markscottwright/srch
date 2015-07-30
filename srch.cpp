@@ -94,7 +94,7 @@ bool in(string const& elem, set<string> const& elems) {
  */
 class srch_directory_iterator {
 private:
-    vector<directory_iterator> path_stack;
+    vector<path> path_stack;
     vector<regex> excluded_directories;
     vector<regex> included_files;
     vector<regex> excluded_files;
@@ -117,9 +117,15 @@ private:
         while (current_pos != end_ || !path_stack.empty()) {
 
             if (current_pos == end_) {
-                current_pos = path_stack.back();
+                auto dir_path = path_stack.back();
                 path_stack.pop_back();
+                current_pos = directory_iterator(dir_path);
             }
+
+            // maybe we popped an empty directory iterator off.  If so, just
+            // loop
+            if (current_pos == end_)
+                continue;
 
             // file
             if (!is_directory(current_pos->path())) {
@@ -134,8 +140,7 @@ private:
             // directory
             else {
                 if (accepted_directory(current_pos->path())) {
-                    path_stack.push_back(
-                        directory_iterator(current_pos->path()));
+                    path_stack.push_back(current_pos->path());
                 }
                 current_pos++;
             }
@@ -177,6 +182,7 @@ public:
 
         current_pos++;
         accept_or_move();
+
         return *this;
     }
 
@@ -228,6 +234,7 @@ struct options_t {
     bool dump_options = false;
     int lines_before = 0;
     int lines_after = 0;
+    int no_pattern = 0;
     vector<string> included_files = DEFAULT_INCLUDES;
     vector<string> excluded_files = DEFAULT_EXCLUDES;
     vector<string> excluded_directories = DEFAULT_EXCLUDED_DIRECTORIES;
@@ -257,6 +264,7 @@ struct options_t {
             << "literal_match=" << literal_match << endl
             << "filenames_only=" << filenames_only << endl
             << "no_filenames=" << no_filenames << endl
+            << "no-pattern=" << no_pattern << endl
             << "count=" << count << endl
             << "lines_before=" << lines_before << endl
             << "lines_after=" << lines_after << endl
@@ -331,6 +339,9 @@ bool parse_options(
         }
         else if (in(arg, set<string>{"-h", "--no-filename"})) {
             options.no_filenames = true;
+        }
+        else if (in(arg, set<string>{"-f"})) {
+            options.no_pattern = true;
         }
         else if (in(arg, set<string>{"-c", "--count"})) {
             options.count = true;
@@ -532,14 +543,20 @@ int main(int argc, char* argv[])
     options_t options;
     vector<string> patterns;
     vector<regex> regex_patterns;
-    if (!parse_options(argc, argv, options, patterns)
-            || patterns.size() == 0) {
+    if (!parse_options(argc, argv, options, patterns)) {
         print_usage(argv[0]);
         exit(1);
     }
 
-    if (options.dump_options)
+    if (options.dump_options) {
         options.dump(cout);
+        exit(0);
+    }
+
+    if (patterns.size() == 0 && !options.no_pattern) {
+        print_usage(argv[0]);
+        exit(1);
+    }
 
     // if we're not doing a literal match, build regex objects
     // TODO literal match + word-regexp isn't working
@@ -566,6 +583,11 @@ int main(int argc, char* argv[])
         int total_matches = 0;
         for (auto file_path : srch_directory_iterator(
                     ".", excluded_directories, included_files, excluded_files)) {
+            if (options.no_pattern) {
+                cout << fixup(file_path) << endl;
+                continue;
+            }
+
             int matches = search_file(
                     file_path, patterns, regex_patterns, options);
             total_matches += matches;
