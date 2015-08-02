@@ -22,7 +22,10 @@ const vector<string> DEFAULT_EXCLUDES = {
     "\\.obj$",
     "\\.exe$",
 };
-const vector<string> DEFAULT_EXCLUDED_DIRECTORIES = {"^\\.git$", "^__pycache__$"};
+const vector<string> DEFAULT_EXCLUDED_DIRECTORIES = {
+    "^\\.git$",
+    "^__pycache__$",
+};
 
 map<string, vector<string>> language_definitions = {
     {"cpp",         {"\\.cpp$", "\\.c$", "\\.h$", "\\.hpp$"}},
@@ -224,19 +227,19 @@ srch_directory_iterator end(srch_directory_iterator& i) {
 }
 
 struct options_t {
-    bool invert = false;
-    bool ignore_case = false;
-    bool match_words = false;
-    bool literal_match = false;
-    bool filenames_only = false;
-    bool no_filenames = false;
-    bool count = false;
-    bool dump_options = false;
-    int lines_before = 0;
-    int lines_after = 0;
-    int no_pattern = 0;
-    vector<string> included_files = DEFAULT_INCLUDES;
-    vector<string> excluded_files = DEFAULT_EXCLUDES;
+    bool invert                         = false;
+    bool ignore_case                    = false;
+    bool match_words                    = false;
+    bool literal_match                  = false;
+    bool filenames_only                 = false;
+    bool no_filenames                   = false;
+    bool count                          = false;
+    bool dump_options                   = false;
+    int lines_before                    = 0;
+    int lines_after                     = 0;
+    int no_pattern                      = 0;
+    vector<string> included_files       = DEFAULT_INCLUDES;
+    vector<string> excluded_files       = DEFAULT_EXCLUDES;
     vector<string> excluded_directories = DEFAULT_EXCLUDED_DIRECTORIES;
 
     string join(vector<string> const& patterns) {
@@ -258,19 +261,19 @@ struct options_t {
         out << "==================================" << endl
             << "options" << endl
             << "==================================" << endl
-            << "invert=" << invert << endl
-            << "ignore_case=" << ignore_case << endl
-            << "match_words=" << match_words << endl
-            << "literal_match=" << literal_match << endl
-            << "filenames_only=" << filenames_only << endl
-            << "no_filenames=" << no_filenames << endl
-            << "no-pattern=" << no_pattern << endl
-            << "count=" << count << endl
-            << "lines_before=" << lines_before << endl
-            << "lines_after=" << lines_after << endl
-            << "included_files=" << join(included_files) << endl
-            << "excluded_files=" << join(excluded_files) << endl
-            << "excluded_directories=" << join(excluded_directories) << endl
+            << "invert               = " << invert << endl
+            << "ignore_case          = " << ignore_case << endl
+            << "match_words          = " << match_words << endl
+            << "literal_match        = " << literal_match << endl
+            << "filenames_only       = " << filenames_only << endl
+            << "no_filenames         = " << no_filenames << endl
+            << "no-pattern           = " << no_pattern << endl
+            << "count                = " << count << endl
+            << "lines_before         = " << lines_before << endl
+            << "lines_after          = " << lines_after << endl
+            << "included_files       = " << join(included_files) << endl
+            << "excluded_files       = " << join(excluded_files) << endl
+            << "excluded_directories = " << join(excluded_directories) << endl
             << "==================================" << endl;
     }
 };
@@ -286,8 +289,6 @@ void bounded_add(vector<string>& items, string const& item, size_t max_size)
 
 /*
  * Strip the leading './' if present.
- *
- * TODO: Convert to windows format if configured
  */
 string fixup(string const& path_str) {
     if (startswith(path_str, "./") || startswith(path_str, ".\\"))
