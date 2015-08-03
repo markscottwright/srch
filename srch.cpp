@@ -16,9 +16,9 @@ using namespace std;
 using namespace std::tr2::sys;
 
 #ifdef _WIN32
-        const bool is_windows = true;
+    const bool is_windows = true;
 #else
-        const bool is_windows = false;
+    const bool is_windows = false;
 #endif
 
 const vector<string> DEFAULT_INCLUDES = {".*"};
@@ -44,9 +44,9 @@ map<string, vector<string>> language_definitions = {
  */
 string tolower(string const& str) {
     string lower_str;
-    lower_str.resize(str.size());
+    lower_str.reserve(str.size());
     transform(
-        str.begin(), str.end(), lower_str.begin(),
+        str.begin(), str.end(), back_inserter(lower_str),
         [](unsigned char i) { return tolower(i); });
     return lower_str;
 }
@@ -419,11 +419,17 @@ void print_usage(string program_name)
     cout << "usage:" << program_name << endl;
 }
 
-bool line_matches(string const& line, vector<string> const& patterns)
+bool line_matches(string const& line, vector<string> const& patterns,
+        bool ignore_case)
 {
     return any_of(begin(patterns), end(patterns),
         [&](const string& pattern) {
-            return line.find(pattern) != string::npos;});
+            if (ignore_case)
+                // TODO inefficient - too many tolower calls
+                return tolower(line).find(tolower(pattern)) != string::npos;
+            else
+                return line.find(pattern) != string::npos;
+    });
 }
 
 bool line_matches(string const& line, vector<regex> const& patterns)
@@ -490,7 +496,7 @@ int search_file(
 
         // any of the patterns present?
         bool found = options.literal_match 
-            ? line_matches(line, patterns)
+            ? line_matches(line, patterns, options.ignore_case)
             : line_matches(line, regex_patterns);
 
         if ((found && !options.invert) || (!found && options.invert)) {
