@@ -15,6 +15,12 @@
 using namespace std;
 using namespace std::tr2::sys;
 
+#ifdef _WIN32
+        const bool is_windows = true;
+#else
+        const bool is_windows = false;
+#endif
+
 const vector<string> DEFAULT_INCLUDES = {".*"};
 const vector<string> DEFAULT_EXCLUDES = {
     "\\.sw[a-z]$",
@@ -240,15 +246,14 @@ struct options_t {
     vector<string> excluded_directories = DEFAULT_EXCLUDED_DIRECTORIES;
 
     string join(vector<string> const& patterns) {
-        // TODO ':' on unix
-        const char* file_separator = ";";
+        const char* file_separator = is_windows ? ";" : ":";
         ostringstream joined;
         bool first_element = true;
         for (auto pattern : patterns) {
             if (first_element)
                 first_element = false;
             else
-                joined << ";";
+                joined << file_separator;
             joined << pattern;
         }
         return joined.str();
@@ -415,22 +420,16 @@ void print_usage(string program_name)
 
 bool line_matches(string const& line, vector<string> const& patterns)
 {
-    for (auto pattern : patterns) {
-        if (line.find(pattern) != string::npos) {
-            return true;
-        }
-    }
-    return false;
+    return any_of(begin(patterns), end(patterns),
+        [&](const string& pattern) {
+            return line.find(pattern) != string::npos;});
 }
 
 bool line_matches(string const& line, vector<regex> const& patterns)
 {
-    for (auto pattern : patterns) {
-        if (regex_search(line, pattern)) {
-            return true;
-        }
-    }
-    return false;
+    return any_of(begin(patterns), end(patterns),
+        [&](const regex& pattern) {
+            return regex_search(line, pattern);});
 }
 
 /** print the lines before the match */
@@ -567,12 +566,6 @@ int main(int argc, char* argv[])
     }
 
     try {
-#ifdef _WIN32
-        bool is_windows = true;
-#else
-        bool is_windows = false;
-#endif
-
         // convert from strings to regexes
         auto excluded_directories = build_regexes(
             options.excluded_directories, is_windows, false);
