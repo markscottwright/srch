@@ -11,6 +11,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <cassert>
 
 using namespace std;
 using namespace std::tr2::sys;
@@ -414,9 +415,68 @@ bool parse_options(
     return true;
 }
 
+string replace(const string& str, const string& pattern, const string& newval)
+{
+    assert(pattern != "");
+    // seems as good a choice for an empty pattern as any...
+    if (pattern == "")
+        return str;
+
+    string newstr;
+    size_t last_end = 0, pattern_begin;
+    while ((pattern_begin = str.find(pattern, last_end)) != string::npos) {
+        newstr.append(str, last_end, pattern_begin-last_end);
+        newstr.append(newval);
+        last_end = pattern_begin + pattern.size();
+    }
+    newstr.append(str, last_end, str.size() - last_end);
+
+    return newstr;
+}
+
 void print_usage(string program_name)
 {
-    cout << "usage:" << program_name << endl;
+    static const vector<string> usage = {
+"usage: program_name [options] PATTERN [files or directories]",
+"",
+"Search for PATTERN in each source file or in the tree from the",
+"current directory down.",
+"",
+"Default switches may be specified in the SRCH_OPTIONS",
+"environment variable or a .srchrc file.",
+"",
+"Example: program_name -i word",
+"",
+"Searching:",
+"-i, --ignore-case          Ignore case distinctions in PATTERN",
+"-v, --invert-match         Return only lines which don't match PATTERN",
+"-w, --word-regexp          Only match if PATTERN is a word",
+"-Q, --literal              Match PATTERN as literal value, not regexp",
+"",
+"Search output:",
+"-l, --files-with-match     Print names of files that match PATTERN",
+"-L, --files-without-match  Print names of files that do not match PATTERN",
+"-h, --no-filename          Suppress printing of filename",
+"-c, --count                Print number of lines that match pattern",
+"--dump-options             Print options to program_name from command",
+"                           line, environment variables and .srchrc",
+"-A N, --after-context=N    Print N lines of input after matching line",
+"-B N, --before-context=N   Print N lines of input before matching line",
+"-C N, --context=N          Print N lines of input before and after matching",
+"                           line",
+"",
+"File finding:",
+"-f                         Only print filenames selected",
+"--[TYPE]                   Select files of TYPE",
+"--no[TYPE]                 Do no select files of TYPE",
+"",
+"Miscellaneous:",
+"--help                     Print this message",
+        };
+
+    for (auto line : usage) {
+        cout << replace(line, "program_name", program_name) << endl;
+    }
 }
 
 bool line_matches(string const& line, vector<string> const& patterns,
