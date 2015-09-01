@@ -14,9 +14,7 @@ TODO
 *   catch.hpp unit tests
 *   Documentation
 *   Complete language types
-*   Print usage
 *   Config from rc, environment variables
-*   word-regexp + literal support
 *   Change arguments from multiple patterns to <pattern> <directories>
 *   CMake build instead of .bat file
 *   Add --type= options in addition to --type option
